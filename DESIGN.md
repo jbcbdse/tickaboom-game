@@ -1,14 +1,8 @@
-# Tickaboom
+# Platform
 
-A web-based multiplayer board game with animations.
+Outer harness for web multiplayer games. Tickaboom (the first game) is specified in [tickaboom/DESIGN.md](tickaboom/DESIGN.md).
 
-## Product
-
-The game is an 11×11 grid for 2–4 players. Each player starts with 1 pip in their home corner. On a turn, a player places a pip on a square they already own, or on an unoccupied square adjacent to one they already own.
-
-Players can play hot-seat on one computer, or online by joining a room with a join code.
-
-Further placement, capture, and win rules are still open (see [Open questions](#open-questions)).
+A plugin on this platform: join-code rooms, hot-seat or online, animated clients. Tickaboom is turn-based; later plugins may be realtime, hidden-info, or asymmetric.
 
 ## Non-goals (v1)
 
@@ -90,7 +84,7 @@ type GameRuntime<TState, TInput, TEvent, TView> = {
 }
 ```
 
-Tickaboom: `TInput` is a cell, no `tick`, `viewFor` returns the full board, `eventsFor` is identity.
+Tickaboom: `TInput` is a cell, no `tick`, `viewFor` / `eventsFor` are identity. Rules: [tickaboom/DESIGN.md](tickaboom/DESIGN.md).
 
 The framework never interprets `TState`, `TInput`, or `TView`. After every successful `applyInput` / `tick`, it loops connected seats and sends each `{ type: "game.view", view, events: eventsFor(...) }`. Clients render `TView` only. They do not receive `TState` and must not run `applyInput` on a guess of the full document.
 
@@ -176,6 +170,8 @@ Three.js is a renderer, not a full engine. Add complexity only when a game needs
 ## Monorepo layout
 
 ```
+tickaboom/
+  DESIGN.md            Tickaboom rules and view (fill this in)
 apps/
   web/                 Framework shell (React) + Tickaboom Three.js view
   server/              Framework rooms + WS; loads game plugins
@@ -190,11 +186,23 @@ packages/
 
 Later games add another engine package and a view; they register on the same server. Do not put Tickaboom cell types in `protocol`.
 
-Package manager scripts (once bootstrapped): `pnpm dev` runs web + server via Turborepo; `pnpm test` runs Jest; `pnpm --filter web dev` for hot-seat-only work.
+Package manager scripts (once bootstrapped): `pnpm --filter web dev` for hot-seat; `pnpm dev` runs web + server later; `pnpm test` runs Jest.
+
+## Build order
+
+Start with the game. The harness waits.
+
+**Milestone 1 — fun (hot-seat).** `packages/engine` (Tickaboom rules as a class that already looks like `GameRuntime`) + `apps/web` (React chrome + Three.js board). Two to four players on one machine. No join codes, no Hono, no sockets. Inversify composition root lives in the web app only.
+
+**Milestone 2 — harness.** `packages/protocol` + `apps/server`. Plug the same engine into rooms, `viewFor` fan-out, and `game.input`. Tickaboom’s projection stays identity.
+
+Do not put rules in the Three.js scene, and do not have the client send a board document “for later.” If M1 talks to a fake `GameRuntime` in-process, M2 is a transport swap, not a rewrite.
+
+Skip creating `apps/server` until M2 if that keeps the first PR small. Empty protocol types can wait too; the engine’s public class *is* the contract until then.
 
 ## Code style
 
-Applies to every package. The engine sketch’s free functions become methods on classes when we bootstrap.
+Applies to every package. Tickaboom engine sketch lives in [tickaboom/DESIGN.md](tickaboom/DESIGN.md); those shapes become classes when we bootstrap.
 
 **Lint.** ESLint 9 flat config + `typescript-eslint`. Enable `strictTypeChecked` and `stylisticTypeChecked` (and keep them on). Type-aware linting is required, not optional. Add `eslint-plugin-jest` for tests. Use `no-restricted-imports` (or equivalent) so consumers cannot import past a folder’s `index.ts`.
 
@@ -231,35 +239,6 @@ player/
 
 `from "@tickaboom/engine"` or `from "../player"` is good. `from "../player/PlayerSeat"` is not.
 
-## Engine sketch (Tickaboom plugin)
-
-This is the Tickaboom plugin. To the framework it is `create` / `applyInput` / `viewFor` (identity) / `eventsFor` (identity), no `tick`. Fill in the rest when mechanics are decided.
-
-```ts
-type PlayerId = 0 | 1 | 2 | 3
-type Cell = { owner: PlayerId | null; pips: number }
-type Board = Cell[][] // 11 x 11
-
-type GameState = {
-  board: Board
-  players: PlayerId[]      // 2–4
-  current: PlayerId
-  status: "playing" | "won" | "drawn"
-  winner: PlayerId | null
-}
-
-type Move = { x: number; y: number }
-type Event = { type: string; /* payload TBD */ }
-
-createGame(playerCount: 2 | 3 | 4): GameState
-legalMoves(state: GameState, player: PlayerId): Move[]
-applyMove(state: GameState, player: PlayerId, move: Move): { state: GameState; events: Event[] }
-```
-
-Known placement rule: a move is legal if the cell is owned by `player`, or the cell is empty and orthogonally adjacent to a cell owned by `player`. (Confirm adjacency: orthogonal only vs including diagonals — see open questions.)
-
-Starting positions: one pip in each occupied home corner. Map 2/3/4 players onto corners explicitly when we implement.
-
 ## Server sketch (framework, v1)
 
 - One listener. Local: `http` + `ws` on one port. Production: one TLS listener, `https` and `wss` (browser WebSocket upgrade). No second socket server.
@@ -274,13 +253,13 @@ Starting positions: one pip in each occupied home corner. Map 2/3/4 players onto
 
 **Shell (framework):** landing (hot-seat vs create vs join), waiting room (roster + start), connection status, result chrome.
 
-**View (game):** Three.js board, pip meshes, turn/win FX. Orthographic camera is enough for v1; perspective / 3D pieces can land later without a renderer swap. No ECS in this client.
+**View (game):** Tickaboom’s Three.js board — see [tickaboom/DESIGN.md](tickaboom/DESIGN.md). Shell stays generic.
 
 Online clients send `game.input` and render `game.view`. They never hold `TState`. Legal-cell highlights come from the view (or a pure function of the view), not from applying the engine to a leaked full board. View state (camera, tweens) stays local. A later game’s view may be a different HUD per `view.role`; the shell stays generic.
 
 ## What we are not deciding yet
 
-Game mechanics beyond the placement rule: explosions, capture, max pips per cell, win/lose, pass, undo, timers.
+Tickaboom rules: [tickaboom/DESIGN.md](tickaboom/DESIGN.md).
 
 Ops: deploy target, process restart, room TTL, rate limits. TLS terminates on the one listener (or a proxy in front of it); still `https` + `wss` as one origin.
 
@@ -288,11 +267,7 @@ Polish: sound, spectators, reconnect, names, colors, accessibility beyond keyboa
 
 ## Open questions
 
-1. **Adjacency** — orthogonal only, or diagonals too?
-2. **Boom / capture** — what happens when a cell fills? Does it explode into neighbors, convert them, or something else?
-3. **Win condition** — last player with pips? last to place? score?
-4. **3-player homes** — which corners, and is the center used?
-5. **Illegal click UX** — ignore, shake, or show why?
-6. **Host disconnect** — cancel room, or promote another player?
-7. **Hot-seat + online in one room** — out of scope for v1?
-8. **Display names / colors** — assigned, or picked in the waiting room?
+Harness only. Game questions live in [tickaboom/DESIGN.md](tickaboom/DESIGN.md).
+
+1. **Host disconnect** — cancel room, or promote another player?
+2. **Hot-seat + online in one room** — out of scope for v1?

@@ -1,0 +1,145 @@
+:root {
+  color: #eef2f8;
+  background: #0e1116;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  display: grid;
+  place-items: center;
+}
+
+.panel {
+  display: grid;
+  gap: 1rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+button {
+  background: #2a3344;
+  color: inherit;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.7rem 1.1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #3d4d66;
+}
+
+.legend,
+.scores {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch i {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.play {
+  width: min(96vw, calc(100vh - 2rem));
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+}
+
+.hud {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.turn {
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.meter {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #1b2230;
+}
+
+.meter-seg {
+  height: 100%;
+}
+
+.score.current {
+  font-weight: 700;
+}
+
+.board-wrap {
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+canvas {
+  display: block;
+  border-radius: 12px;
+}
+
+.result-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding: 1.25rem;
+  pointer-events: none;
+}
+
+.result-banner {
+  pointer-events: auto;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+  text-align: center;
+  padding: 0.9rem 1.4rem 1.1rem;
+  border-radius: 14px;
+  background: rgba(14, 17, 22, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.result-banner h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
