@@ -136,7 +136,7 @@ export function App() {
         setHost(mySeatRef.current === message.hostSeat);
       },
       onStarted: () => {
-        setPhase("online");
+        setPhase((current) => (current === "landing" ? "lobby" : current));
       },
       onView: (rawView, rawEvents) => {
         const next = views.parseState(rawView);
@@ -146,6 +146,7 @@ export function App() {
         }
         const board = viewRef.current;
         if (board !== null && events.length > 0 && !board.isBusy()) {
+          setPhase("online");
           app.audio.play(events);
           board.playEvents(events, next, legalFor(next, mySeatRef.current), () => {
             setShown(next);
@@ -154,6 +155,7 @@ export function App() {
         }
         board?.setState(next, legalFor(next, mySeatRef.current));
         setShown(next);
+        setPhase("online");
       },
       onEnded: (reason) => {
         if (reason === "empty_timeout") {
@@ -162,11 +164,11 @@ export function App() {
         }
       },
       onError: (reason) => {
-        setError(reason);
         if (reason === "room_not_found" || reason === "invalid_token") {
-          onlineRef.current?.close();
-          setPhase("landing");
+          tokens.clear(code);
+          resetToLanding();
         }
+        setError(reason);
       },
     });
     onlineRef.current = session;
@@ -212,7 +214,7 @@ export function App() {
     );
   }
 
-  if (phase === "lobby") {
+  if (phase === "lobby" || (phase === "online" && shown === null)) {
     return (
       <WaitingRoom
         joinCode={joinCode}

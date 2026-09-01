@@ -25,6 +25,16 @@ export class MemoryRoomRepository extends RoomRepository {
     return Promise.resolve();
   }
 
+  public override saveNew(room: RoomDocument): Promise<boolean> {
+    this.purge(room.joinCode);
+    if (this.rooms.has(room.joinCode)) {
+      return Promise.resolve(false);
+    }
+    this.rooms.set(room.joinCode, structuredClone(room));
+    this.expiresAt.delete(room.joinCode);
+    return Promise.resolve(true);
+  }
+
   public override delete(joinCode: string): Promise<void> {
     this.rooms.delete(joinCode);
     this.expiresAt.delete(joinCode);

@@ -63,11 +63,17 @@ export class OnlineSession {
   }
 
   public start(): void {
-    this.ws?.send(JSON.stringify({ type: "room.start" }));
+    this.send({ type: "room.start" });
   }
 
   public sendInput(payload: unknown): void {
-    this.ws?.send(JSON.stringify({ type: "game.input", payload }));
+    this.send({ type: "game.input", payload });
+  }
+
+  private send(payload: unknown): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(payload));
+    }
   }
 
   public close(): void {

@@ -43,24 +43,46 @@ export class RoomSocketHandler {
     const token = url.searchParams.get("token") ?? undefined;
     wss.handleUpgrade(request, socket, head, (ws) => {
       const wrapped = this.wrap(ws);
-      void this.rooms.join(joinCode, token, wrapped);
+      ws.on("error", (error: Error) => {
+        console.error("ws", error.message);
+      });
+      void this.rooms.join(joinCode, token, wrapped).catch((error: unknown) => {
+        console.error("room.join", error);
+        wrapped.close();
+      });
       ws.on("message", (data) => {
-        void this.rooms.handleMessage(wrapped, this.raw(data));
+        void this.rooms
+          .handleMessage(wrapped, this.raw(data))
+          .catch((error: unknown) => {
+            console.error("room.message", error);
+          });
       });
       ws.on("close", () => {
-        void this.rooms.leave(wrapped);
+        void this.rooms.leave(wrapped).catch((error: unknown) => {
+          console.error("room.leave", error);
+        });
       });
     });
   }
 
   private wrap(ws: WebSocket): Socket {
+    let closed =
+      ws.readyState === WebSocket.CLOSED ||
+      ws.readyState === WebSocket.CLOSING;
+    ws.on("close", () => {
+      closed = true;
+    });
     return {
       send: (data: string) => {
-        ws.send(data);
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        }
       },
       close: () => {
+        closed = true;
         ws.close();
       },
+      isClosed: () => closed,
     };
   }
 

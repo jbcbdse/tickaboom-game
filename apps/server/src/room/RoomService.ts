@@ -39,7 +39,7 @@ export class RoomService {
       if (await this.rooms.exists(joinCode)) {
         continue;
       }
-      await this.rooms.save({
+      const created = await this.rooms.saveNew({
         joinCode,
         gameId,
         hostSeat: "" as SeatId,
@@ -47,6 +47,9 @@ export class RoomService {
         seats: [],
         gameState: null,
       });
+      if (!created) {
+        continue;
+      }
       await this.rooms.expire(joinCode, EMPTY_ROOM_TTL_SECONDS);
       return { joinCode };
     }
@@ -80,8 +83,8 @@ export class RoomService {
   }
 
   public async handleMessage(socket: Socket, raw: string): Promise<void> {
-    const location = this.connections.lookup(socket);
-    if (location === undefined) {
+    const hint = this.connections.lookup(socket);
+    if (hint === undefined) {
       this.error(socket, "not_joined");
       return;
     }
@@ -90,7 +93,12 @@ export class RoomService {
       this.error(socket, "bad_message");
       return;
     }
-    await this.mutex.run(location.joinCode, async () => {
+    await this.mutex.run(hint.joinCode, async () => {
+      const location = this.connections.lookup(socket);
+      if (location === undefined) {
+        this.error(socket, "not_joined");
+        return;
+      }
       const room = await this.rooms.get(location.joinCode);
       if (room === null) {
         this.error(socket, "room_not_found");
@@ -105,11 +113,15 @@ export class RoomService {
   }
 
   public async leave(socket: Socket): Promise<void> {
-    const location = this.connections.lookup(socket);
-    if (location === undefined) {
+    const hint = this.connections.lookup(socket);
+    if (hint === undefined) {
       return;
     }
-    await this.mutex.run(location.joinCode, async () => {
+    await this.mutex.run(hint.joinCode, async () => {
+      const location = this.connections.lookup(socket);
+      if (location === undefined) {
+        return;
+      }
       this.connections.detach(location.joinCode, location.seat);
       const room = await this.rooms.get(location.joinCode);
       if (room === null) {
@@ -164,6 +176,9 @@ export class RoomService {
     previous?.close();
     seat.connected = true;
     this.connections.attach(room.joinCode, seat.seat, socket);
+    if (await this.dropIfClosed(room, socket, seat.seat)) {
+      return;
+    }
     await this.rooms.save(room);
     this.sendJoined(socket, room, seat, game);
     this.broadcastRoster(room);
@@ -199,6 +214,9 @@ export class RoomService {
       room.hostSeat = seatId;
     }
     this.connections.attach(room.joinCode, seatId, socket);
+    if (await this.dropIfClosed(room, socket, seatId)) {
+      return;
+    }
     await this.rooms.save(room);
     this.sendJoined(socket, room, seat, game);
     this.broadcastRoster(room);
@@ -328,6 +346,34 @@ export class RoomService {
       })),
     };
     this.connections.sendAll(room.joinCode, message);
+  }
+
+  private async dropIfClosed(
+    room: RoomDocument,
+    socket: Socket,
+    seatId: SeatId,
+  ): Promise<boolean> {
+    if (!socket.isClosed()) {
+      return false;
+    }
+    this.connections.detach(room.joinCode, seatId);
+    if (room.phase === "lobby") {
+      room.seats = room.seats.filter((seat) => seat.seat !== seatId);
+      if (room.hostSeat === seatId) {
+        room.hostSeat = room.seats[0]?.seat ?? ("" as SeatId);
+      }
+    } else {
+      const seat = room.seats.find((entry) => entry.seat === seatId);
+      if (seat !== undefined) {
+        seat.connected = false;
+      }
+    }
+    await this.rooms.save(room);
+    if (this.connections.connectedCount(room.joinCode) === 0) {
+      await this.rooms.expire(room.joinCode, EMPTY_ROOM_TTL_SECONDS);
+    }
+    this.broadcastRoster(room);
+    return true;
   }
 
   private nextSeat(room: RoomDocument): SeatId {

@@ -2,6 +2,7 @@ import type { Config } from "jest";
 
 const config: Config = {
   testEnvironment: "node",
+  testPathIgnorePatterns: ["/dist/"],
   setupFiles: ["reflect-metadata"],
   extensionsToTreatAsEsm: [".ts"],
   moduleNameMapper: {

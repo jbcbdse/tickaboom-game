@@ -113,6 +113,10 @@ class FakeSocket implements Socket {
   public close(): void {
     this.closed = true;
   }
+
+  public isClosed(): boolean {
+    return this.closed;
+  }
 }
 
 function harness() {
@@ -348,6 +352,19 @@ describe("RoomService", () => {
       reason: "game_over",
     });
     expect(await rooms.get(joinCode)).toBeNull();
+  });
+
+  it("does not keep a lobby seat when the socket is already closed", async () => {
+    const { service, rooms } = harness();
+    const created = await service.createRoom("fake");
+    if ("reason" in created) {
+      throw new Error(created.reason);
+    }
+    const dead = new FakeSocket();
+    dead.closed = true;
+    await service.join(created.joinCode, undefined, dead);
+    const room = await rooms.get(created.joinCode);
+    expect(room?.seats).toEqual([]);
   });
 
   it("rejects a new seat after start", async () => {

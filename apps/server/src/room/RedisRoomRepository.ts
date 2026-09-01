@@ -27,6 +27,15 @@ export class RedisRoomRepository extends RoomRepository {
     await this.redis.client.set(this.key(room.joinCode), this.codec.encode(room));
   }
 
+  public override async saveNew(room: RoomDocument): Promise<boolean> {
+    const result = await this.redis.client.set(
+      this.key(room.joinCode),
+      this.codec.encode(room),
+      { NX: true },
+    );
+    return result === "OK";
+  }
+
   public override async delete(joinCode: string): Promise<void> {
     await this.redis.client.del(this.key(joinCode));
   }
