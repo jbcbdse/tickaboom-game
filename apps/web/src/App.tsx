@@ -214,7 +214,7 @@ export function App() {
     );
   }
 
-  if (phase === "lobby" || (phase === "online" && shown === null)) {
+  if (phase === "lobby" || shown === null) {
     return (
       <WaitingRoom
         joinCode={joinCode}
@@ -234,10 +234,6 @@ export function App() {
         }}
       />
     );
-  }
-
-  if (!shown) {
-    return null;
   }
 
   const ended = shown.status !== "playing";

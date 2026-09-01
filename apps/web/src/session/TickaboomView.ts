@@ -10,6 +10,7 @@ export class TickaboomView {
     }
     if (
       !Array.isArray(value.board) ||
+      value.board.some((row) => !Array.isArray(row)) ||
       !Array.isArray(value.players) ||
       !Array.isArray(value.seats) ||
       typeof value.current !== "number" ||

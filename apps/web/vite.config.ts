@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
-    allowedHosts: ["kubuntu-pc2026.local"],
+    allowedHosts: true,
     proxy: {
       "/games": "http://127.0.0.1:8787",
       "/rooms": {

@@ -116,6 +116,7 @@ export class BoardView {
     }
     window.addEventListener("resize", this.onResize);
     this.onResize();
+    requestAnimationFrame(this.onResize);
     this.tick();
   }
 
@@ -499,11 +500,15 @@ export class BoardView {
   }
 
   private readonly onResize = (): void => {
+    if (this.disposed) {
+      return;
+    }
     const canvas = this.renderer.domElement;
     const parent = canvas.parentElement;
-    const width = parent?.clientWidth ?? 640;
-    const height = parent?.clientHeight ?? 640;
-    const size = Math.min(width, height);
+    const width = parent?.clientWidth ?? 0;
+    const height = parent?.clientHeight ?? 0;
+    const measured = Math.min(width, height);
+    const size = measured >= 2 ? measured : 640;
     this.renderer.setSize(size, size);
   };
 
