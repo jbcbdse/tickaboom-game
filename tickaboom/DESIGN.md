@@ -2,7 +2,7 @@
 
 Game rules and view. Platform, rooms, and transport live in [../DESIGN.md](../DESIGN.md).
 
-Milestone 1 is this game, hot-seat only. Fill the **Rules** section; the engine should not invent mechanics.
+Milestone 1 (hot-seat) is done. Online uses the same engine on the server; `viewFor` stays identity. A disconnected seat waits — the game does not skip their turn. Legal highlights on an online client are computed from the received view, not from `applyInput`.
 
 ## Shape (locked)
 
@@ -55,7 +55,7 @@ Players must always take a turn.
 
 ## Engine contract
 
-Class in `packages/engine` implements `GameRuntime`. No sockets, no Three.js.
+Class in `packages/engine` implements `GameRuntime` from `@tickaboom/protocol`. No sockets, no Three.js.
 
 ```ts
 type PlayerId = 0 | 1 | 2 | 3

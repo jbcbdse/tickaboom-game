@@ -24,6 +24,6 @@
     "typescript-eslint": "^8.68.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@swc/core"]
+    "onlyBuiltDependencies": ["@swc/core", "esbuild"]
   }
 }

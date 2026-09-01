@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@tickaboom/engine": "workspace:*",
+    "@tickaboom/protocol": "workspace:*",
     "inversify": "^8.2.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

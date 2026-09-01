@@ -18,6 +18,14 @@ const deepModuleImport = {
     "**/session/!(index.ts)",
     "**/composition/!(index.ts)",
     "**/ui/!(index.ts)",
+    "**/message/!(index.ts)",
+    "**/games/!(index.ts)",
+    "**/room/!(index.ts)",
+    "**/connection/!(index.ts)",
+    "**/http/!(index.ts)",
+    "**/ws/!(index.ts)",
+    "**/catalog/!(index.ts)",
+    "**/api/!(index.ts)",
   ],
   message: "Import the module index, not a file inside the subdirectory.",
 };
@@ -29,6 +37,7 @@ export default defineConfig(
       "**/coverage/**",
       "**/.turbo/**",
       "**/node_modules/**",
+      "**/jest.config.ts",
     ],
   },
   eslint.configs.recommended,
@@ -36,10 +45,10 @@ export default defineConfig(
   ...tseslint.configs.stylisticTypeChecked,
   {
     languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
+        parserOptions: {
+          projectService: true,
+          tsconfigRootDir: import.meta.dirname,
+        },
     },
     rules: {
       "@typescript-eslint/no-unused-vars": [
@@ -64,6 +73,14 @@ export default defineConfig(
       "**/session/**",
       "**/composition/**",
       "**/ui/**",
+      "**/message/**",
+      "**/games/**",
+      "**/room/**",
+      "**/connection/**",
+      "**/http/**",
+      "**/ws/**",
+      "**/catalog/**",
+      "**/api/**",
     ],
     rules: {
       "no-restricted-imports": ["error", { patterns: [deepModuleImport] }],
