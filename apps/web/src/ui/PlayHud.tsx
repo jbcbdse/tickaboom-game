@@ -5,9 +5,11 @@ import type { PlayerColors } from "../view";
 interface PlayHudProps {
   state: GameState;
   colors: PlayerColors;
+  disconnected: readonly PlayerId[];
 }
 
-export function PlayHud({ state, colors }: PlayHudProps) {
+export function PlayHud({ state, colors, disconnected }: PlayHudProps) {
+  const waiting = disconnected.includes(state.current);
   const total = state.players.reduce<number>(
     (sum, player) => sum + pipCount(state, player),
     0,
@@ -17,7 +19,9 @@ export function PlayHud({ state, colors }: PlayHudProps) {
       ? `Player ${String(state.winner + 1)} wins`
       : state.status === "drawn"
         ? "Draw"
-        : `Player ${String(state.current + 1)}'s turn`;
+        : waiting
+          ? `Waiting for Player ${String(state.current + 1)} (disconnected)`
+          : `Player ${String(state.current + 1)}'s turn`;
   return (
     <div className="hud">
       <div
@@ -52,6 +56,7 @@ export function PlayHud({ state, colors }: PlayHudProps) {
             style={{ color: colors.css(player) }}
           >
             P{player + 1} · {pipCount(state, player)}
+            {disconnected.includes(player) ? " · disconnected" : ""}
           </span>
         ))}
       </div>

@@ -16,7 +16,7 @@ A plugin on this platform: join-code rooms, hot-seat or online, animated clients
 
 **Hot-seat.** One browser, one engine instance, no server. The client holds full plugin state and shows `viewFor` for the active seat. Fine for Tickaboom (perfect information). Hidden-info games cannot be honest hot-seat: the device has every secret. Those games are online-only, or honor-system with a pass-and-cover screen.
 
-**Online.** One player creates a room and gets a short join code. Others join anonymously. Clients send *inputs*, never a new document, and receive only *their* view, never the authoritative blob. The room server stores opaque game state and asks the plugin to apply input, tick, and project a per-seat view.
+**Online.** One player creates a room and gets a short join code. Others join anonymously. Clients send *inputs*, never a new document, and receive only *their* view, never the authoritative blob. Redis stores the opaque game document. The room process asks the plugin to apply input, tick, and project a per-seat view. Live WebSockets stay in that process.
 
 Same game plugin runs in hot-seat (in the browser) and online (on the server) so the rules cannot drift.
 
@@ -46,7 +46,7 @@ Two layers. The outer layer is a small multiplayer shell. Tickaboom is a plugin.
 | --- | --- | --- |
 | Identity of a session | Join code, seats, host, roster, `gameId` | — |
 | Phase | `lobby` / `playing` / `ended` | `playing` / `won` / `drawn` inside game state |
-| Transport | WebSocket, HTTP `POST /rooms`, reconnect token | — |
+| Transport | WebSocket, HTTP `POST /rooms`, seat token | — |
 | Who may act | Seat is connected; host may start | Whether that seat’s input is legal (turn, realtime, or role-specific) |
 | State it owns | Room record + opaque `gameState` blob | Full rules state, including secrets the framework must never send |
 | UI | Landing, create/join, waiting room, connection/errors | Per-seat view: board, HUD, objectives, FX |
@@ -63,7 +63,7 @@ Four kinds of state, never mixed:
 
 The backend does **not** trust a client board. It also does **not** hardcode Tickaboom cells.
 
-It understands a `GameRuntime` interface and which seat sent the message:
+It understands a `GameRuntime` interface (in `@tickaboom/protocol`) and which seat sent the message:
 
 ```ts
 type SeatId = string
@@ -119,7 +119,7 @@ We are not building a relay. v1 is friends-with-a-code and Tickaboom needs none 
 2. Players connect `WS /rooms/:joinCode`. Framework assigns seats and broadcasts `room.roster`.
 3. Host sends `room.start` when seated count is within the plugin’s `meta` range. Framework calls `runtime.create(seats)` and stores the blob; sends each connection `room.started` + `game.view` for that seat.
 4. A client sends `game.input`. Framework does not interpret the payload. Plugin accepts or rejects. Realtime plugins also get `tick` from the room loop. After a state change, fan out `viewFor` / `eventsFor` per seat — do not broadcast `TState`.
-5. Room dies when the game ends or everyone disconnects. No persistence in v1.
+5. Room Redis key dies when the game ends, or 60s after every socket is gone. Seat token in `sessionStorage` reclaims a disconnected seat.
 
 ### Protocol envelope
 
@@ -141,8 +141,8 @@ game.view     { view, events }                    // server → that seat only
 | Bundler / web | Vite | Fast local loop for the client |
 | Board / animation | Three.js | Same view stack for a flat board, 3D flair, and later 3D games |
 | Shell UI | React | Cheap forms and room UI; not used to draw the board |
-| HTTP + sockets | Hono + `ws` on one Node listener | Same port: HTTP(S) routes and WS(S) upgrade. `@hono/node-server` `upgradeWebSocket` (≥ 2.0.10) |
-| Rooms (v1) | In-process `Map` | Zero infra until the game works |
+| Rooms (v1) | Redis `room:{joinCode}` JSON + in-process sockets | Survives process restart for 60s empty TTL; sockets do not |
+| HTTP + sockets | Hono + `ws` on one Node listener | Same port. `@hono/node-server` `serve` + `ws` upgrade |
 | Tests | Jest | Style default; engine and protocol are Node tests, no Vite-specific runner needed |
 
 Deliberately not using boardgame.io or Colyseus in v1. They solve lobby/sync well but hide the move loop we want to own. Revisit only if room sync becomes the hard part.
@@ -171,22 +171,23 @@ Three.js is a renderer, not a full engine. Add complexity only when a game needs
 
 ```
 tickaboom/
-  DESIGN.md            Tickaboom rules and view (fill this in)
+  DESIGN.md            Tickaboom rules and view
 apps/
   web/                 Framework shell (React) + Tickaboom Three.js view
   server/              Framework rooms + WS; loads game plugins
 packages/
   protocol/            Room envelope + GameRuntime interface
   engine/              Tickaboom plugin (create / applyInput / viewFor)
+docker-compose.yml     Redis 7 for local rooms
 ```
 
 `web` depends on `protocol` + `engine` (hot-seat; Tickaboom `viewFor` is the full board).
 `server` depends on `protocol` + `engine` (registers `tickaboom`).
-`engine` depends on nothing the framework does not define. It does not import sockets or Three.js.
+`engine` depends on `protocol`. It does not import sockets or Three.js.
 
 Later games add another engine package and a view; they register on the same server. Do not put Tickaboom cell types in `protocol`.
 
-Package manager scripts (once bootstrapped): `pnpm --filter web dev` for hot-seat; `pnpm dev` runs web + server later; `pnpm test` runs Jest.
+Package manager scripts: `pnpm --filter web dev` for hot-seat; `pnpm dev` runs web + server; `docker compose up -d` for Redis; `pnpm test` runs Jest.
 
 ## Build order
 
@@ -194,11 +195,9 @@ Start with the game. The harness waits.
 
 **Milestone 1 — fun (hot-seat).** `packages/engine` (Tickaboom rules as a class that already looks like `GameRuntime`) + `apps/web` (React chrome + Three.js board). Two to four players on one machine. No join codes, no Hono, no sockets. Inversify composition root lives in the web app only.
 
-**Milestone 2 — harness.** `packages/protocol` + `apps/server`. Plug the same engine into rooms, `viewFor` fan-out, and `game.input`. Tickaboom’s projection stays identity.
+**Milestone 2 — harness (this).** `packages/protocol` + `apps/server` + web shell. Same engine in rooms, Redis blob, `viewFor` fan-out, `game.input`. Tickaboom’s projection stays identity. Seat tokens and 60s empty TTL are in.
 
-Do not put rules in the Three.js scene, and do not have the client send a board document “for later.” If M1 talks to a fake `GameRuntime` in-process, M2 is a transport swap, not a rewrite.
-
-Skip creating `apps/server` until M2 if that keeps the first PR small. Empty protocol types can wait too; the engine’s public class *is* the contract until then.
+Do not put rules in the Three.js scene, and do not have the client send a board document.
 
 ## Code style
 
@@ -241,13 +240,14 @@ player/
 
 ## Server sketch (framework, v1)
 
-- One listener. Local: `http` + `ws` on one port. Production: one TLS listener, `https` and `wss` (browser WebSocket upgrade). No second socket server.
-- `POST /rooms` `{ gameId }` → `{ joinCode }` (6 chars, unambiguous alphabet).
-- `WS /rooms/:joinCode` → join as next seat, or reconnect if we later add a seat token.
-- Owns room state. Stores `gameState` as a blob. Never applies a client-supplied document. Never sends that blob to clients.
-- On `game.input`, calls the registered plugin; does not parse game fields. Fans out `viewFor` per seat. No tick loop until a plugin registers one.
-- Seat count from plugin `meta`, not a hardcoded 2–4. `room.start` only from the host, only when seated count is in range.
-- No auth. Optional later: short-lived seat token in `sessionStorage` so a refresh reclaims the same seat.
+- One listener. Local: `http` + `ws` on one port. Production: one TLS listener, `https` and `wss`. No second socket server.
+- `GET /games`, `POST /rooms` `{ gameId }` → `{ joinCode }` (6 chars, unambiguous alphabet).
+- `WS /rooms/:joinCode` → next seat, or `?token=` to reclaim.
+- Redis owns the room document and `gameState` blob. Never applies a client-supplied document. Never sends that blob to clients.
+- On `game.input`, calls the registered plugin; does not parse game fields. Fans out `viewFor` per connected seat. No tick loop until a plugin registers one.
+- Seat count from plugin `meta`. `room.start` only from the host, only when seated count is in range.
+- No auth. Seat token in `sessionStorage`. Lobby disconnect drops the seat and promotes host. Play disconnect waits (Tickaboom). Empty room `EXPIRE` 60s.
+- Per-package notes: [packages/protocol/DESIGN.md](packages/protocol/DESIGN.md), [apps/server/DESIGN.md](apps/server/DESIGN.md), [apps/web/DESIGN.md](apps/web/DESIGN.md).
 
 ## Client sketch
 
@@ -257,17 +257,28 @@ player/
 
 Online clients send `game.input` and render `game.view`. They never hold `TState`. Legal-cell highlights come from the view (or a pure function of the view), not from applying the engine to a leaked full board. View state (camera, tweens) stays local. A later game’s view may be a different HUD per `view.role`; the shell stays generic.
 
+## Deploy
+
+**This milestone:** `docker compose up -d` Redis + `pnpm dev` on the machine.
+
+**Next ops look:** deploy **locally to k8s** (kind/k3d or similar) so the server, web, and Redis are real cluster services. Manifests are not in this milestone.
+
+**Later milestone:** a **cheap AWS** shape with **API Gateway** (HTTP + WebSocket APIs) in front of the room server. Today’s server is a **long-lived Node process holding sockets**. APIGW WebSocket connection IDs would replace the in-process map; that is a contract change, not a lift-and-shift. Do not pick Lambda vs ECS vs a single box yet.
+
+TLS still terminates on the one listener (or a proxy in front of it); `https` + `wss` as one origin.
+
 ## What we are not deciding yet
 
 Tickaboom rules: [tickaboom/DESIGN.md](tickaboom/DESIGN.md).
 
-Ops: deploy target, process restart, room TTL, rate limits. TLS terminates on the one listener (or a proxy in front of it); still `https` + `wss` as one origin.
+Rate limits. Redis pub/sub for multiple Node processes. Spectators, names, extra a11y.
 
-Polish: sound, spectators, reconnect, names, colors, accessibility beyond keyboard/touch.
+Polish: platform-level sound, colors beyond Tickaboom.
 
 ## Open questions
 
-Harness only. Game questions live in [tickaboom/DESIGN.md](tickaboom/DESIGN.md).
+Resolved for v1:
 
-1. **Host disconnect** — cancel room, or promote another player?
-2. **Hot-seat + online in one room** — out of scope for v1?
+1. **Host disconnect (lobby)** — drop the seat; promote the oldest remaining player.
+2. **Play disconnect** — framework only tracks presence. Tickaboom waits. Empty room (all sockets gone) expires in 60s.
+3. **Hot-seat + online in one room** — out of scope for v1.

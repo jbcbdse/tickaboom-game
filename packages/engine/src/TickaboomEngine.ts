@@ -68,7 +68,7 @@ export class TickaboomEngine
     if (player !== state.current) {
       return { ok: false, reason: "not_your_turn" };
     }
-    if (!this.placement.isLegal(state, player, input)) {
+    if (!TickaboomEngine.isMove(input) || !this.placement.isLegal(state, player, input)) {
       return { ok: false, reason: "illegal_move" };
     }
 
@@ -136,6 +136,17 @@ export class TickaboomEngine
 
   public pipCount(state: GameState, player: PlayerId): number {
     return Board.fromCells(this.geometry, state.board).pipCount(player);
+  }
+
+  private static isMove(input: unknown): input is Move {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      "x" in input &&
+      "y" in input &&
+      typeof input.x === "number" &&
+      typeof input.y === "number"
+    );
   }
 
   private playerForSeat(state: GameState, seat: SeatId): PlayerId | null {
