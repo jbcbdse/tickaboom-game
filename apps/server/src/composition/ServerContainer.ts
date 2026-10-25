@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { TickaboomBindings, TickaboomEngine } from "@tickaboom/engine";
 import { ClientMessageParser } from "@tickaboom/protocol";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { Container } from "inversify";
 
 import { ConnectionMap } from "../connection/index.ts";
@@ -54,6 +55,7 @@ export class ServerContainer {
     await this.container.get(RedisConnection).connect();
     await this.container.get(RoomService).onBoot();
     const app = new Hono();
+    app.use("*", cors());
     this.container.get(ListGamesRoute).register(app);
     this.container.get(CreateRoomRoute).register(app);
     const server = serve({ fetch: app.fetch, port }, (info) => {
